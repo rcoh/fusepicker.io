@@ -7,7 +7,7 @@ import json
 import cookielib
 from cookies import build_cookiejar
 
-FP_API_KEY = "YOURAPIKEY_HERE"
+FP_API_KEY = "apikey"
 FP_HOSTNAME = "www.filepicker.io"
 FP_BASEURL = "https://" + FP_HOSTNAME + "/"
 REQUEST_CODE_AUTH = 600
@@ -27,23 +27,60 @@ def js_session_mimetypes(mimetypes):
   return base_dict
 
 def get_path(path, mimetypes):
-  safe_path = urllib.quote_plus(path)
+  safe_path = urllib.quote_plus(path).replace('+', '%20')
+  if not safe_path.endswith('/'):
+    safe_path += '/'
   base_url = FP_BASEURL + "api/path" + safe_path 
   query = {'format': 'info', 'js_session':
       json.dumps(js_session_mimetypes(mimetypes)) }
 
   url = "%s?%s" % (base_url, urllib.urlencode(query))
+  
   print "url: ", url
   return url
-  
-realurl = \
-"""https://www.filepicker.io/api/path/Dropbox/6.01%20Design/?js_session=%257B%2522apikey%2522%253A%2522l5uQ3k7FQ5GoYCHyTdZV%2522%252C%2522mimetypes%2522%253A%255B%2522image%252F*%2522%255D%252C%2522persist%2522%253Afalse%252C%2522version%2522%253A%2522v1%2522%252C%2522storeLocation%2522%253Anull%257D&format=info"""
 
-builturl = get_path("/Dropbox/", "")
+path_cache = {}
+file_cache = {}
+def data_for_dir(path):
+  if path in path_cache:
+    return path_cache[path]
+  else:
+    #TODO: mimetypes
+    #TODO: memoize / cache
+    builturl = get_path(path, "")
+    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+    r = opener.open(builturl)
+    path_cache[path] = json.loads(r.read())
+    return data_for_dir(path)
+
+
+
 
 cj = cookielib.CookieJar()
 build_cookiejar('.filepicker.io', cj)
-print cj
-opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
-r = opener.open(builturl)
-print r.read()
+#### PUBLIC ####
+def list_dir(path):
+  path = "/Dropbox" + path
+  data = data_for_dir(path)
+  if not 'contents' in data:
+    print "missing contents!", data
+
+  files = data['contents']
+  print path, "Returning %d files" % len(files)
+  [update_cache(path, f) for f in files]
+  return [f['filename'] for f in files]
+
+def update_cache(path, f):
+  if not path.endswith('/'):
+    path += '/'
+  file_cache[path + f['filename']] = f
+
+def get_metadata(path):
+  if path in file_cache:
+    print "cache hit"
+    return file_cache[path]
+  else:
+    print "cache miss for: %s" % path
+#    import pdb; pdb.set_trace()
+    return {}
+
