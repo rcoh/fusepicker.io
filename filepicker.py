@@ -7,7 +7,7 @@ import json
 import cookielib
 from cookies import build_cookiejar
 
-FP_API_KEY = "apikey"
+FP_API_KEY = "apikey2"
 FP_HOSTNAME = "www.filepicker.io"
 FP_BASEURL = "https://" + FP_HOSTNAME + "/"
 REQUEST_CODE_AUTH = 600
@@ -54,33 +54,48 @@ def data_for_dir(path):
     return data_for_dir(path)
 
 
-
-
 cj = cookielib.CookieJar()
 build_cookiejar('.filepicker.io', cj)
 #### PUBLIC ####
 def list_dir(path):
-  path = "/Dropbox" + path
+  if path == "/":
+    list_dir('/Dropbox')
+    list_dir('/Facebook')
+    root = {'is_dir': True, 'filename': ''}
+    update_cache("/", root)
+    return ["Dropbox", "Facebook"]
+  path = path
   data = data_for_dir(path)
   if not 'contents' in data:
     print "missing contents!", data
 
   files = data['contents']
+  root_data = dict(data)
+  root_data['is_dir'] = True
+  del root_data['contents']
+  file_cache[path] = root_data
   print path, "Returning %d files" % len(files)
   [update_cache(path, f) for f in files]
-  return [f['filename'] for f in files]
+  return [f['display_name'] for f in files]
 
 def update_cache(path, f):
   if not path.endswith('/'):
     path += '/'
-  file_cache[path + f['filename']] = f
+  if 'display_name' in f:
+    path += f['display_name']
+  else:
+    path += f['filename']
+  file_cache[path] = f
 
 def get_metadata(path):
+  if path == "/":
+    return {'is_dir': True, 'filename': ''}
   if path in file_cache:
     print "cache hit"
     return file_cache[path]
   else:
     print "cache miss for: %s" % path
+#    print file_cache
 #    import pdb; pdb.set_trace()
     return {}
 

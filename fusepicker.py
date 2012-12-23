@@ -26,7 +26,7 @@ class FilePicker(LoggingMixIn, Operations):
     pass
 
   def getattr(self, path, fh=None):
-    data = filepicker.get_metadata("/Dropbox" + path)
+    data = filepicker.get_metadata(path)
     dirm = S_IFDIR | 755
     filem = S_IFREG | 444
     if data:
@@ -35,7 +35,7 @@ class FilePicker(LoggingMixIn, Operations):
       raise FuseOSError(ENOENT)
 
 
-    return {'st_atime': 0, 'st_gid': 0, 'st_mode': mode, 'st_uid':
+    return {'st_atime': 0, 'st_gid': 1000, 'st_mode': mode, 'st_uid':
         1000, 'st_size': 1000 }
 
   def mkdir(self, path, mode):
