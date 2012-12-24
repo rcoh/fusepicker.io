@@ -7,7 +7,7 @@ import json
 import cookielib
 from cookies import build_cookiejar
 
-FP_API_KEY = "apikey"
+FP_API_KEY = "AOMWo29UpR4K4XuYWHG6Dz"
 FP_HOSTNAME = "www.filepicker.io"
 FP_BASEURL = "https://" + FP_HOSTNAME + "/"
 REQUEST_CODE_AUTH = 600
@@ -43,11 +43,14 @@ def update_cache(path, data):
 
   #TODO: throw out content?
     
+  x = 'is_dir' in file_cache[path]
   file_cache[path] = dict(file_cache[path].items() + data.items())
+  if x and not 'is_dir' in file_cache[path]:
+    assert(False)
   if 'link_path' in data:
     link_table[path] = data['link_path']
 
-def get_path(path, mimetypes):
+def get_path_info(path, mimetypes):
   if path in link_table:
     path = link_table[path]
   else:
@@ -68,20 +71,45 @@ def get_path(path, mimetypes):
   print "url: ", url
   return url
 
-# [ display-path -> link]
+def get_path_url(path):
+  safe_path = urllib.quote_plus(path).replace('+', '%20')
+
+  if not safe_path.endswith('/'):
+    safe_path += '/'
+
+
+  base_url = FP_BASEURL + "api/path" + safe_path 
+  query = {'format': 'fpurl', 'js_session':
+      json.dumps(js_session()) }
+
+  url = "%s?%s" % (base_url, urllib.urlencode(query))
+  return url
+
+def get_response(path):
+  opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
+  r = opener.open(path)
+  buf = r.read()
+  try:
+    data = json.loads(buf)
+  except:
+    print "failed parse. data was", buf, " Path was: ", path
+  return data
+
+
 def data_for_dir(path):
   if path in file_cache and 'contents' in file_cache[path]:
     return file_cache[path]
   else:
     #TODO: mimetypes
-    builturl = get_path(path, "")
-    opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
-    r = opener.open(builturl)
-    data = json.loads(r.read())
+    builturl = get_path_info(path, "")
+    data = get_response(builturl)
     #if 'contents' in data and data['contents']:
     #  data['is_dir'] = True
     file_cache[path] = data
     return data_for_dir(path)
+
+def url_for_file(path):
+  return get_response(get_path_url(path))['url']
 
 #### PUBLIC ####
 
@@ -120,7 +148,7 @@ def list_dir(path):
 
 def get_metadata(path):
   if path in file_cache:
-    print "cache hit"
+    print "cache hit", path
     return file_cache[path]
   else:
     print "cache miss for: %s" % path

@@ -45,8 +45,12 @@ class FilePicker(LoggingMixIn, Operations):
     pass
 
   def read(self, path, size, offset, fh):
-    print "READCALLED", path
-    return "some content"
+    url = filepicker.url_for_file(path)
+    f = urllib2.urlopen(path)
+    f.seek(offset, 0)
+    buf = f.read(size)
+    f.close()
+    return buf
 
   def readdir(self, path, fh):
     ret = ['.', '..'] + [name.encode('utf-8') for name in
