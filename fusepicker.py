@@ -12,7 +12,8 @@ from stat import S_IFDIR, S_IFREG
 
 class FilePicker(LoggingMixIn, Operations):
   def __init__(self, path='.'):
-    pass
+    filepicker.warm_cache()
+
   def chmod(self, path, mode):
     pass
 
@@ -30,6 +31,8 @@ class FilePicker(LoggingMixIn, Operations):
     dirm = S_IFDIR | 755
     filem = S_IFREG | 444
     if data:
+      if not 'is_dir' in data:
+        print data
       mode = dirm if data['is_dir'] else filem
     else:
       raise FuseOSError(ENOENT)

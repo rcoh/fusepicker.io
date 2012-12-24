@@ -7,13 +7,23 @@ import json
 import cookielib
 from cookies import build_cookiejar
 
-FP_API_KEY = "apikey2"
+FP_API_KEY = "apikey"
 FP_HOSTNAME = "www.filepicker.io"
 FP_BASEURL = "https://" + FP_HOSTNAME + "/"
 REQUEST_CODE_AUTH = 600
 REQUEST_CODE_GETFILE = 601
 REQUEST_CODE_SAVEFILE = 602
 REQUEST_CODE_GETFILE_LOCAL = 603
+
+HOST_LIST = ['Dropbox', 'Facebook', 'Gmail']
+
+link_table = {}
+file_cache = {'/': {'is_dir': True}}
+
+cj = cookielib.CookieJar()
+build_cookiejar('.filepicker.io', cj)
+
+
 
 def api_key_dict():
   return { 'app': {'apikey': FP_API_KEY} }
@@ -26,10 +36,29 @@ def js_session_mimetypes(mimetypes):
   base_dict['mimetypes'] = mimetypes
   return base_dict
 
+def update_cache(path, data):
+  print 'caching ', path
+  if not path in file_cache:
+    file_cache[path] = {}
+
+  #TODO: throw out content?
+    
+  file_cache[path] = dict(file_cache[path].items() + data.items())
+  if 'link_path' in data:
+    link_table[path] = data['link_path']
+
 def get_path(path, mimetypes):
+  if path in link_table:
+    path = link_table[path]
+  else:
+    print path, "not in cache. trying direct request"
+
   safe_path = urllib.quote_plus(path).replace('+', '%20')
+
   if not safe_path.endswith('/'):
     safe_path += '/'
+
+
   base_url = FP_BASEURL + "api/path" + safe_path 
   query = {'format': 'info', 'js_session':
       json.dumps(js_session_mimetypes(mimetypes)) }
@@ -39,63 +68,61 @@ def get_path(path, mimetypes):
   print "url: ", url
   return url
 
-path_cache = {}
-file_cache = {}
+# [ display-path -> link]
 def data_for_dir(path):
-  if path in path_cache:
-    return path_cache[path]
+  if path in file_cache and 'contents' in file_cache[path]:
+    return file_cache[path]
   else:
     #TODO: mimetypes
-    #TODO: memoize / cache
     builturl = get_path(path, "")
     opener = urllib2.build_opener(urllib2.HTTPCookieProcessor(cj))
     r = opener.open(builturl)
-    path_cache[path] = json.loads(r.read())
+    data = json.loads(r.read())
+    #if 'contents' in data and data['contents']:
+    #  data['is_dir'] = True
+    file_cache[path] = data
     return data_for_dir(path)
 
-
-cj = cookielib.CookieJar()
-build_cookiejar('.filepicker.io', cj)
 #### PUBLIC ####
+
+def warm_cache():
+  # Place the known hosts in the root
+  contents = []
+  for host in HOST_LIST:
+    host_path = '/' + host
+    host_dict = { 'is_dir': True, 'display_name': host }
+    # Caches the host
+    update_cache(host_path, host_dict)
+    print file_cache['/' + host]
+    data = data_for_dir(host_path)
+    update_cache(host_path, data)
+    data = dict(data)
+    del data['contents']
+    contents.append(host_dict)
+
+  file_cache['/']['contents'] = contents  
+  print file_cache['/']
+
 def list_dir(path):
-  if path == "/":
-    list_dir('/Dropbox')
-    list_dir('/Facebook')
-    root = {'is_dir': True, 'filename': ''}
-    update_cache("/", root)
-    return ["Dropbox", "Facebook"]
-  path = path
   data = data_for_dir(path)
   if not 'contents' in data:
-    print "missing contents!", data
+    print "missing contents! Data:", data
+
 
   files = data['contents']
-  root_data = dict(data)
-  root_data['is_dir'] = True
-  del root_data['contents']
-  file_cache[path] = root_data
   print path, "Returning %d files" % len(files)
-  [update_cache(path, f) for f in files]
-  return [f['display_name'] for f in files]
-
-def update_cache(path, f):
+  update_cache(path, data)
   if not path.endswith('/'):
     path += '/'
-  if 'display_name' in f:
-    path += f['display_name']
-  else:
-    path += f['filename']
-  file_cache[path] = f
+  [update_cache(path + f['display_name'], f) for f in files]
+  return [f['display_name'] for f in files]
+
 
 def get_metadata(path):
-  if path == "/":
-    return {'is_dir': True, 'filename': ''}
   if path in file_cache:
     print "cache hit"
     return file_cache[path]
   else:
     print "cache miss for: %s" % path
-#    print file_cache
-#    import pdb; pdb.set_trace()
     return {}
 
