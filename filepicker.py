@@ -5,6 +5,7 @@ A python library for accessing Filepicker.io
 import urllib, urllib2
 import json
 import cookielib
+import uuid
 from cookies import build_cookiejar
 
 FP_API_KEY = "AOMWo29UpR4K4XuYWHG6Dz"
@@ -36,17 +37,22 @@ def js_session_mimetypes(mimetypes):
   base_dict['mimetypes'] = mimetypes
   return base_dict
 
+def is_dir_del(data):
+  return 'is_dir' in data and data['is_dir']
 def update_cache(path, data):
-  print 'caching ', path
+  print 'caching ', path, 'is_dir:', is_dir_del(data)
+  if path in file_cache:
+    print 'previously: ', is_dir_del(file_cache[path])
   if not path in file_cache:
     file_cache[path] = {}
 
   #TODO: throw out content?
+
+  if 'display_name' in data:
+    data['display_name'] = safe_display_name(data['display_name'])
     
-  x = 'is_dir' in file_cache[path]
   file_cache[path] = dict(file_cache[path].items() + data.items())
-  if x and not 'is_dir' in file_cache[path]:
-    assert(False)
+  print 'after: ', is_dir_del(file_cache[path])
   if 'link_path' in data:
     link_table[path] = data['link_path']
 
@@ -71,12 +77,14 @@ def get_path_info(path, mimetypes):
   print "url: ", url
   return url
 
+def safe_display_name(name):
+  if name == "":
+    return str(uuid.uuid1())
+    
+  return name.replace('/', """\/""")
+
 def get_path_url(path):
   safe_path = urllib.quote_plus(path).replace('+', '%20')
-
-  if not safe_path.endswith('/'):
-    safe_path += '/'
-
 
   base_url = FP_BASEURL + "api/path" + safe_path 
   query = {'format': 'fpurl', 'js_session':
@@ -93,6 +101,7 @@ def get_response(path):
     data = json.loads(buf)
   except:
     print "failed parse. data was", buf, " Path was: ", path
+    data = None
   return data
 
 
@@ -142,8 +151,8 @@ def list_dir(path):
   update_cache(path, data)
   if not path.endswith('/'):
     path += '/'
-  [update_cache(path + f['display_name'], f) for f in files]
-  return [f['display_name'] for f in files]
+  [update_cache(path + safe_display_name(f['display_name']), f) for f in files]
+  return [safe_display_name(f['display_name']) for f in files]
 
 
 def get_metadata(path):

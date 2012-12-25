@@ -10,9 +10,12 @@ from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 import filepicker
 from stat import S_IFDIR, S_IFREG
 
+import urllib2
+
 class FilePicker(LoggingMixIn, Operations):
   def __init__(self, path='.'):
     filepicker.warm_cache()
+    self.data_cache = {}
 
   def chmod(self, path, mode):
     pass
@@ -32,8 +35,10 @@ class FilePicker(LoggingMixIn, Operations):
     filem = S_IFREG | 444
     if data:
       if not 'is_dir' in data:
-        print data
-      mode = dirm if data['is_dir'] else filem
+        print 'no is_dir for ', path
+        mode = filem
+      else:
+        mode = dirm if data['is_dir'] else filem
     else:
       raise FuseOSError(ENOENT)
 
@@ -45,12 +50,26 @@ class FilePicker(LoggingMixIn, Operations):
     pass
 
   def read(self, path, size, offset, fh):
-    url = filepicker.url_for_file(path)
-    f = urllib2.urlopen(path)
-    f.seek(offset, 0)
-    buf = f.read(size)
-    f.close()
-    return buf
+    if path in self.data_cache:
+      (old_offset, data) = self.data_cache[path]
+    else:
+      url = filepicker.url_for_file(path)
+      print "url to download from: ", url
+      f = urllib2.urlopen(url)
+      # TODO: cache data
+      data = f.read()
+      old_offset = 0
+      self.data_cache[path] = (old_offset, data)
+
+    offset += old_offset
+    print "requesting", path, "offset:", offset, "size:", size, "real len:", len(data)
+    start = min(len(data), offset)
+    end = min(len(data), offset+size)
+    print "start", start, "end", end
+    offset += end - start
+    self.data_cache[path] = (offset, data)
+
+    return data[start:end]
 
   def readdir(self, path, fh):
     ret = ['.', '..'] + [name.encode('utf-8') for name in
