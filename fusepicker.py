@@ -16,6 +16,7 @@ class FilePicker(LoggingMixIn, Operations):
   def __init__(self, path='.'):
     filepicker.warm_cache()
     self.data_cache = {}
+    self.fd = 0
 
   def chmod(self, path, mode):
     pass
@@ -24,7 +25,8 @@ class FilePicker(LoggingMixIn, Operations):
     pass
 
   def create(self, path, mode):
-    print "create called"
+    self.fd += 1
+    return self.fd
 
   def destroy(self, path):
     pass
@@ -39,35 +41,37 @@ class FilePicker(LoggingMixIn, Operations):
         mode = filem
       else:
         mode = dirm if data['is_dir'] else filem
+
+      if 'bytes' in data:
+        size = data['bytes']
+      else:
+        size = 1000
     else:
       raise FuseOSError(ENOENT)
 
 
     return {'st_atime': 0, 'st_gid': 1000, 'st_mode': mode, 'st_uid':
-        1000, 'st_size': 1000 }
+        1000, 'st_size': size}
 
   def mkdir(self, path, mode):
     pass
 
   def read(self, path, size, offset, fh):
+    #TODO: handle file descriptors properly
     if path in self.data_cache:
-      (old_offset, data) = self.data_cache[path]
+      data = self.data_cache[path]
     else:
       url = filepicker.url_for_file(path)
       print "url to download from: ", url
       f = urllib2.urlopen(url)
-      # TODO: cache data
       data = f.read()
       old_offset = 0
-      self.data_cache[path] = (old_offset, data)
+      self.data_cache[path] = data
 
-    offset += old_offset
     print "requesting", path, "offset:", offset, "size:", size, "real len:", len(data)
     start = min(len(data), offset)
     end = min(len(data), offset+size)
     print "start", start, "end", end
-    offset += end - start
-    self.data_cache[path] = (offset, data)
 
     return data[start:end]
 

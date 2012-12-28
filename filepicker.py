@@ -157,7 +157,6 @@ def list_dir(path):
 
 def get_metadata(path):
   if path in file_cache:
-    print "cache hit", path
     return file_cache[path]
   else:
     print "cache miss for: %s" % path
